@@ -8,6 +8,17 @@ The code has been pulled out of the initial [PR](https://github.com/ianunruh/hva
 
 `pip install git+https://github.com/linaro-its/vault_auth.git`
 
+or, if using pipenv:
+
+`pipenv install git+https://github.com/linaro-its/vault_auth.git#egg=vault_auth`
+
+## Principles
+
+The majority of uses of this code will be by scripts running on AWS EC2 instances. As a result, IAM instance roles will be used to link to Vault policies.
+
+To simplify authentication for scripts running in different places (e.g. on multiple instances or on developer systems), the role name specified in the call to `get_secret` is *assumed* prior to creating the signed response for Vault. This allows roles to be associated with the script itself rather than the instance the script is running on.
+
+
 ## Usage
 
     import vault_auth
@@ -22,9 +33,7 @@ This returns the JSON data from Vault, allowing the data to be accessed thus:
 
     password = secret["data]["pw]
 
-or whatever the key is.
-
-The role name is assumed prior to building the response for Vault. This allows a script to be written to use a single IAM role regardless of where it is being run from. The IAM role can be configured to be assumed by the desired IAM instance role or by the role of a script tester/author.
+or whatever the key used to hold the secret that is being retrieved.
 
 `vault_auth` caches the authentication token and host details so subsequent calls can be simplified thus:
 
