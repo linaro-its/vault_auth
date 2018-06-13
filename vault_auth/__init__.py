@@ -28,10 +28,7 @@ import requests
 import boto3
 import base64
 import json
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+from urllib.parse import urlparse
 
 
 global_token = None
@@ -110,26 +107,13 @@ def generate_vault_request(role, vault_host):
     return {
         'iam_http_request_method': request.method,
         'iam_request_url': str(
-            base64.b64encode(
-                request.url.encode('ascii')
-            )
-        ).encode('ascii'),
+            base64.b64encode(request.url.encode('ascii')), 'ascii'),
         'iam_request_body': str(
-            base64.b64encode(
-                request.body.encode('ascii')
-            )
-        ).encode('ascii'),
+            base64.b64encode(request.body.encode('ascii')), 'ascii'),
         'iam_request_headers': str(
-            base64.b64encode(
-                bytes(
-                    json.dumps(
-                        prep_for_serialization(
-                            dict(request.headers)
-                        )
-                    )
-                ).encode('ascii')
-            )
-        ).encode('ascii'),
+            base64.b64encode(bytes(json.dumps(prep_for_serialization(
+                dict(request.headers))), 'ascii')),
+            'ascii'),
         'role': role,
     }
 
@@ -144,7 +128,7 @@ def prep_for_serialization(headers):
     ret = {}
     for k, v in headers.items():
         if isinstance(v, bytes):
-            ret[k] = [str(v).encode('ascii')]
+            ret[k] = [str(v, 'ascii')]
         else:
             ret[k] = [v]
     return ret
