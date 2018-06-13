@@ -110,13 +110,12 @@ def generate_vault_request(role, vault_host):
     return {
         'iam_http_request_method': request.method,
         'iam_request_url': str(
-            base64.b64encode(request.url.encode('ascii')), 'ascii'),
+            base64.b64encode(request.url.encode('ascii'))).encode('ascii'),
         'iam_request_body': str(
-            base64.b64encode(request.body.encode('ascii')), 'ascii'),
+            base64.b64encode(request.body.encode('ascii'))).encode('ascii'),
         'iam_request_headers': str(
             base64.b64encode(bytes(json.dumps(prep_for_serialization(
-                dict(request.headers))), 'ascii')),
-            'ascii'),
+                dict(request.headers)))).encode('ascii'))).encode('ascii'),
         'role': role,
     }
 
