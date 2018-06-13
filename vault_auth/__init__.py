@@ -82,11 +82,22 @@ def generate_vault_request(role, vault_host):
 
     See https://www.vaultproject.io/docs/auth/aws.html for more.
 
-    :param role: Role of this lambda
+    :param role: AWS role name
     :return: Request body
     """
 
     client = boto3.client('sts')
+    # Get the current identity so that we can extract the account details
+    identity = client.get_caller_identity()
+    role_arn = "arn:aws:iam::{}:role/{}".format(identity["Account"], role)
+    new_identity = client.assume_role(RoleArn=role_arn, RoleSessionName=role)
+    # Set up a new boto3 client with this identity
+    client = boto3.client(
+        'sts',
+        aws_access_key_id=new_identity["Credentials"]["AccessKeyId"],
+        aws_secret_access_key=new_identity["Credentials"]["SecretAccessKey"],
+        aws_session_token=new_identity["Credentials"]["SessionToken"]
+    )
     operation_model = client._service_model.operation_model(
         'GetCallerIdentity')
     request_dict = client._convert_to_request_dict({}, operation_model)
