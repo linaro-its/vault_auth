@@ -144,7 +144,7 @@ def prep_for_serialization(headers):
     ret = {}
     for k, v in headers.items():
         if isinstance(v, bytes):
-            ret[k] = [str(v, 'ascii')]
+            ret[k] = [str(v).encode('ascii')]
         else:
             ret[k] = [v]
     return ret
