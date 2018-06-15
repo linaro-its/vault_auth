@@ -144,12 +144,13 @@ def get_secret(path, token=None, iam_role=None, url=None):
         if global_token is None:
             global_token = auth_iam(iam_role, url)
         token = global_token
-        header = {
-            "X-Vault-Token": token
-        }
-        response = requests.get(
-            "https://{}:{}/v1/{}".format(vault_host, vault_port, path),
-            headers=header)
-        if response.status_code == 200:
-            return response.json()
-    return None
+    header = {
+        "X-Vault-Token": token
+    }
+    response = requests.get(
+        "https://{}:{}/v1/{}".format(vault_host, vault_port, path),
+        headers=header)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise Exception(response.text)
