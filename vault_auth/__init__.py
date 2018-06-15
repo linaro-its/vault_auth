@@ -152,5 +152,15 @@ def get_secret(path, token=None, iam_role=None, url=None):
         headers=header)
     if response.status_code == 200:
         return response.json()
+    elif response.status_code == 400:
+        raise Exception("Invalid request, missing or invalid data")
+    elif response.status_code == 403:
+        raise Exception("Forbidden")
+    elif response.status_code == 404:
+        raise Exception("Invalid path")
     else:
-        raise Exception(response.text)
+        message = response.json()
+        if "errors" in message:
+            raise Exception(message["errors"][0])
+        else:
+            raise Exception(response.text)
