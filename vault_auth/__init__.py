@@ -93,7 +93,13 @@ def generate_vault_request(role, vault_host):
     # Get the current identity so that we can extract the account details
     identity = client.get_caller_identity()
     role_arn = "arn:aws:iam::{}:role/{}".format(identity["Account"], role)
-    new_identity = client.assume_role(RoleArn=role_arn, RoleSessionName=role)
+    try:
+        new_identity = client.assume_role(
+            RoleArn=role_arn, RoleSessionName=role)
+    except Exception as e:
+        raise Exception(
+            "Failed to get identity for role {}".format(role_arn)) from e
+
     # Set up a new boto3 client with this identity
     client = boto3.client(
         'sts',
