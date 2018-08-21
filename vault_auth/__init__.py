@@ -39,7 +39,7 @@ vault_host = None
 vault_port = None
 
 
-def auth_iam(iam_role, url):
+def auth_iam(iam_role, url, debug):
     """
     Authenticate to Vault per https://www.vaultproject.io/docs/auth/aws.htm.
 
@@ -53,11 +53,12 @@ def auth_iam(iam_role, url):
     return authenticate_to_vault(parsed.hostname,
                                  parsed.port,
                                  iam_role,
-                                 True)
+                                 True,
+                                 debug)
 
 
-def authenticate_to_vault(vault_host, vault_port, role, verify):
-    payload = generate_vault_request(role, vault_host)
+def authenticate_to_vault(vault_host, vault_port, role, verify, debug):
+    payload = generate_vault_request(role, vault_host, debug)
 
     headers = {
         'Content-type': 'application/json',
@@ -77,7 +78,7 @@ def authenticate_to_vault(vault_host, vault_port, role, verify):
     return body['auth']['client_token']
 
 
-def generate_vault_request(role, vault_host):
+def generate_vault_request(role, vault_host, debug):
     """
     Generate a signed sts:GetCallerIdentity request to validate identify of
     the client. The Vault server reconstructs the query and forwards it to STS
@@ -99,6 +100,9 @@ def generate_vault_request(role, vault_host):
     except Exception as e:
         raise Exception(
             "Failed to get identity for role {}".format(role_arn)) from e
+
+    if debug:
+        print("Got identity for role {}".format(role_arn))
 
     # Set up a new boto3 client with this identity
     client = boto3.client(
@@ -144,11 +148,11 @@ def prep_for_serialization(headers):
     return ret
 
 
-def get_secret(path, token=None, iam_role=None, url=None):
+def get_secret(path, token=None, iam_role=None, url=None, debug=False):
     global global_token
     if token is None:
         if global_token is None:
-            global_token = auth_iam(iam_role, url)
+            global_token = auth_iam(iam_role, url, debug)
         token = global_token
     header = {
         "X-Vault-Token": token
@@ -161,9 +165,9 @@ def get_secret(path, token=None, iam_role=None, url=None):
     elif response.status_code == 400:
         raise Exception("Invalid request, missing or invalid data")
     elif response.status_code == 403:
-        raise Exception("Forbidden")
+        raise Exception("Forbidden to retrieve %s" % path)
     elif response.status_code == 404:
-        raise Exception("Invalid path")
+        raise Exception("Invalid path (%s)" % path)
     else:
         message = response.json()
         if "errors" in message:
