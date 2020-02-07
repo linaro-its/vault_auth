@@ -37,7 +37,9 @@ except ImportError:
     from urlparse import urlparse
 
 
-global_token = None
+# Temporarily stop caching - it is causing problems and we don't (yet) have
+# a workable solution.
+# global_token = None
 vault_host = None
 vault_port = None
 logger = logging.getLogger(__name__)
@@ -160,23 +162,21 @@ def prep_for_serialization(headers):
     return ret
 
 
+def get_token(iam_role, url, debug):
+    """
+    At the moment, the logic behind renewing a token is unclear so we
+    will just authenticate every time we need a token.
+    """
+    return auth_iam(iam_role, url, debug)
+
+
 def get_secret(path, token=None, iam_role=None, url=None, debug=False):
-    global global_token
-    if token is None:
-        if debug:
-            logger.debug("token is None, checking global token")
-        if global_token is None:
-            if debug:
-                logger.debug("global_token is None, initialising IAM Auth")
-            global_token = auth_iam(iam_role, url, debug)
-        elif debug:
-            logger.debug("got global_token")
-        token = global_token
+    token = get_token(iam_role, url, debug)
     header = {
         "X-Vault-Token": token
     }
     if debug:
-        logger.debug('GET https://{}:{}/v1/{}'.format(vault_host, vault_port, path)
+        logger.debug('GET https://{}:{}/v1/{}'.format(vault_host, vault_port, path))
     response = requests.get(
         "https://{}:{}/v1/{}".format(vault_host, vault_port, path),
         headers=header)
