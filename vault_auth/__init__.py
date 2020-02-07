@@ -24,19 +24,25 @@
 # foo = vault_auth.get_secret(path)
 
 
-import requests
-import boto3
 import base64
 import json
+import logging.handlers
+
+import boto3
+import requests
+
 try:
     from urllib.parse import urlparse
 except ImportError:
     from urlparse import urlparse
 
 
-global_token = None
+# Temporarily stop caching - it is causing problems and we don't (yet) have
+# a workable solution.
+# global_token = None
 vault_host = None
 vault_port = None
+logger = logging.getLogger(__name__)
 
 
 def auth_iam(iam_role, url, debug):
@@ -47,6 +53,8 @@ def auth_iam(iam_role, url, debug):
     :return:
     """
     global vault_host, vault_port
+    if debug:
+        logger.debug("auth_iam(%s, %s)" % (iam_role, url))
     parsed = urlparse(url)
     vault_host = parsed.hostname
     vault_port = parsed.port
@@ -58,13 +66,17 @@ def auth_iam(iam_role, url, debug):
 
 
 def authenticate_to_vault(vault_host, vault_port, role, verify, debug):
+    if debug:
+        logger.debug("authenticate_to_vault(%s, %s, %s, %s)" % (
+            vault_host, vault_port, role, verify))
     payload = generate_vault_request(role, vault_host, debug)
 
     headers = {
         'Content-type': 'application/json',
         'Accept': 'text/plain'
     }
-
+    if debug:
+        logger.debug('POST https://{}:{}/v1/auth/aws/login'.format(vault_host, vault_port))
     response = requests.post(
         'https://{}:{}/v1/auth/aws/login'.format(vault_host, vault_port),
         data=json.dumps(payload),
@@ -72,8 +84,10 @@ def authenticate_to_vault(vault_host, vault_port, role, verify, debug):
         verify=verify)
     if response.status_code != 200:
         raise Exception(
-            "Failed to login to Vault due to error {} with body {}".format(
+            "Failed to authenticate to Vault due to error {} with body {}".format(
                 response.status_code, response.text))
+    elif debug:
+        logger.debug("Successfully authenticated to Vault")
     body = response.json()
     return body['auth']['client_token']
 
@@ -102,7 +116,7 @@ def generate_vault_request(role, vault_host, debug):
             "Failed to get identity for role {}".format(role_arn)) from e
 
     if debug:
-        print("Got identity for role {}".format(role_arn))
+        logger.debug("Got identity for role {}".format(role_arn))
 
     # Set up a new boto3 client with this identity
     client = boto3.client(
@@ -148,19 +162,27 @@ def prep_for_serialization(headers):
     return ret
 
 
+def get_token(iam_role, url, debug):
+    """
+    At the moment, the logic behind renewing a token is unclear so we
+    will just authenticate every time we need a token.
+    """
+    return auth_iam(iam_role, url, debug)
+
+
 def get_secret(path, token=None, iam_role=None, url=None, debug=False):
-    global global_token
-    if token is None:
-        if global_token is None:
-            global_token = auth_iam(iam_role, url, debug)
-        token = global_token
+    token = get_token(iam_role, url, debug)
     header = {
         "X-Vault-Token": token
     }
+    if debug:
+        logger.debug('GET https://{}:{}/v1/{}'.format(vault_host, vault_port, path))
     response = requests.get(
         "https://{}:{}/v1/{}".format(vault_host, vault_port, path),
         headers=header)
     if response.status_code == 200:
+        if debug:
+            logger.debug("Successfully got secret for %s" % path)
         return response.json()
     elif response.status_code == 400:
         raise Exception("Invalid request, missing or invalid data")
