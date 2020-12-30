@@ -8,7 +8,7 @@
 # b) at the moment at least, ITS only needs simple secret retrieval, not the
 #    whole of the hvac functionality.
 #
-# The ITS contribution to this code is the function at the end. The aim is to
+# The ITS contribution to this code is at the end. The aim is to
 # make retrieval of secrets as simple as possible, e.g.:
 #
 # foo = vault_auth.get_secret(
@@ -18,10 +18,8 @@
 # if foo is not None:
 #     print(foo["data"]["pw"])
 #
-# The code caches the token so that subsequent calls for a secret can be
-# simplified to this:
-#
-# foo = vault_auth.get_secret(path)
+# The code does not cache the authentication token retrieved after performing the AWS IAM
+# auth, so the token is revoked after the secret has been retrieved from Vault.
 
 
 import base64
@@ -37,9 +35,6 @@ except ImportError:
     from urlparse import urlparse
 
 
-# Temporarily stop caching - it is causing problems and we don't (yet) have
-# a workable solution.
-# global_token = None
 vault_host = None
 vault_port = None
 logger = logging.getLogger(__name__)
@@ -162,16 +157,32 @@ def prep_for_serialization(headers):
     return ret
 
 
-def get_token(iam_role, url, debug):
+def revoke_token(token, vault_host, vault_port, debug):
     """
-    At the moment, the logic behind renewing a token is unclear so we
-    will just authenticate every time we need a token.
+    Since we aren't caching the authentication token, we need to revoke it
+    after using it so that Vault doesn't fill up its database with leases.
     """
-    return auth_iam(iam_role, url, debug)
+    if debug:
+        logger.debug("Revoking token '%s'" % token)
+    header = {
+        "X-Vault-Token": token
+    }
+    response = requests.post(
+        "https://{}:{}/v1/auth/token/revoke-self".format(vault_host, vault_port),
+        headers=header)
+    if response.status_code == 204:
+        if debug:
+            logger.debug("Successfully revoked '%s'" % token)
+        return
+    message = response.json()
+    if "errors" in message:
+        raise Exception(message["errors"][0])
+    else:
+        raise Exception(response.text)
 
 
 def get_secret(path, token=None, iam_role=None, url=None, debug=False):
-    token = get_token(iam_role, url, debug)
+    token = auth_iam(iam_role, url, debug)
     header = {
         "X-Vault-Token": token
     }
@@ -180,6 +191,7 @@ def get_secret(path, token=None, iam_role=None, url=None, debug=False):
     response = requests.get(
         "https://{}:{}/v1/{}".format(vault_host, vault_port, path),
         headers=header)
+    revoke_token(token, vault_host, vault_port, debug)
     if response.status_code == 200:
         if debug:
             logger.debug("Successfully got secret for %s" % path)
@@ -190,9 +202,9 @@ def get_secret(path, token=None, iam_role=None, url=None, debug=False):
         raise Exception("Forbidden to retrieve %s" % path)
     elif response.status_code == 404:
         raise Exception("Invalid path (%s)" % path)
+
+    message = response.json()
+    if "errors" in message:
+        raise Exception(message["errors"][0])
     else:
-        message = response.json()
-        if "errors" in message:
-            raise Exception(message["errors"][0])
-        else:
-            raise Exception(response.text)
+        raise Exception(response.text)
